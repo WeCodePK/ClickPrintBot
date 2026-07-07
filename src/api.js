@@ -35,7 +35,9 @@ function extractMessage(res, fallback) {
  * per phone number via POST /auth/token { number }, token at data.data.token.
  */
 async function fetchNewToken(number) {
-  const res = await http.post('/api/auth/token', { number });
+  const res = await http.post('/api/auth/token', { number }, {
+    headers: { Authorization: `ApiKey ${process.env.SERVICE_KEY}` },
+  });
   if (res.status < 200 || res.status >= 300) {
     throw new ApiError(extractMessage(res, 'Could not authenticate with the backend.'), res.status);
   }
