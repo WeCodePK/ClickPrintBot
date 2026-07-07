@@ -12,20 +12,50 @@ function makeReply(msg) {
   return (text) => msg.reply(text);
 }
 
+const digits = (jid) => (jid || '').split('@')[0].replace(/\D/g, '');
+
 /**
- * Work out the user's real phone number. WhatsApp now addresses some chats with
- * a `@lid` (linked id) instead of `@c.us`, whose local part is NOT the phone
- * number, so we prefer the number from the resolved contact and only fall back
- * to the id's local part.
+ * Resolve the sender's real phone number.
+ *
+ * WhatsApp addresses some chats by a `@lid` (linked id) whose digits are NOT
+ * the phone number. For those we use the LID<->PN mapping to get the phone-JID
+ * (`pn`), falling back to the resolved contact's number. The result is cached
+ * (see session.getCachedPhone) so this only round-trips WhatsApp once per user.
  */
-async function resolveNumber(msg) {
+async function resolvePhone(msg) {
+  const from = msg.from || '';
+
+  // Already a phone-number JID — the local part is the number.
+  if (from.endsWith('@c.us')) return digits(from);
+
+  // @lid: translate to the phone-number JID.
+  try {
+    const [mapping] = await msg.client.getContactLidAndPhone([from]);
+    if (mapping && mapping.pn) return digits(mapping.pn);
+  } catch (err) {
+    logger.debug(`LID->PN resolution failed for ${from}: ${err.message}`);
+  }
+
+  // Fallback: the contact's number (available when it isn't hidden).
   try {
     const contact = await msg.getContact();
-    if (contact && contact.number) return contact.number.replace(/\D/g, '');
+    if (contact && contact.number) return digits(contact.number);
   } catch (err) {
-    logger.debug(`getContact failed for ${msg.from}: ${err.message}`);
+    logger.debug(`getContact failed for ${from}: ${err.message}`);
   }
-  return (msg.from || '').split('@')[0].replace(/\D/g, '');
+
+  return null;
+}
+
+/** Resolve + cache the sender's phone number, keyed by the stable chat id. */
+async function resolveNumber(msg) {
+  const from = msg.from || '';
+  const cached = await session.getCachedPhone(from);
+  if (cached) return cached;
+
+  const phone = await resolvePhone(msg);
+  if (phone) await session.setCachedPhone(from, phone);
+  return phone;
 }
 
 function isGroupOrBroadcast(from) {
@@ -40,12 +70,18 @@ async function route(msg) {
 
   logger.info(`Incoming message from ${from} (type=${msg.type})`);
 
+  const reply = makeReply(msg);
+
   const number = await resolveNumber(msg);
   if (!number) {
-    logger.warn(`Could not resolve a phone number for ${from}, ignoring.`);
+    logger.warn(`Could not resolve a phone number for ${from}.`);
+    await reply(
+      "Sorry, I couldn't read your WhatsApp number, so I can't look up your account. " +
+        'This can happen if your number is hidden. Please try again later.'
+    );
     return;
   }
-  const reply = makeReply(msg);
+  logger.info(`Resolved ${from} -> ${number}`);
 
   // Serialise per-user so album bursts don't race draft edits.
   await session.withUserLock(number, async () => {

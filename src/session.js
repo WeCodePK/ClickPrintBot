@@ -5,6 +5,23 @@ const config = require('./config');
 
 const draftKey = (number) => `draft:${number}`;
 const listKey = (number, kind) => `list:${kind}:${number}`;
+const phoneKey = (chatId) => `pn:${chatId}`;
+
+// ---------------------------------------------------------------------------
+// Chat-id -> phone-number cache
+//
+// WhatsApp addresses chats by a stable LID (`@lid`) whose digits are NOT the
+// phone number. Resolving the phone requires a round-trip to WhatsApp, so we
+// cache the mapping (chat id -> phone) durably — the LID never changes.
+// ---------------------------------------------------------------------------
+
+function getCachedPhone(chatId) {
+  return redis.get(phoneKey(chatId));
+}
+
+function setCachedPhone(chatId, phone) {
+  return redis.set(phoneKey(chatId), phone);
+}
 
 // ---------------------------------------------------------------------------
 // Active draft pointer
@@ -66,6 +83,8 @@ function withUserLock(number, task) {
 }
 
 module.exports = {
+  getCachedPhone,
+  setCachedPhone,
   getActiveDraftId,
   setActiveDraftId,
   clearActiveDraft,
