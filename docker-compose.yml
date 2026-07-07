@@ -1,0 +1,36 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      CLICKPRINT_API_URL: ${CLICKPRINT_API_URL:-https://clickprintbackend.wckd.pk}
+      REDIS_URL: redis://redis:6379
+      WWEBJS_DATA_PATH: /data
+      WWEBJS_CLIENT_ID: ${WWEBJS_CLIENT_ID:-clickprint}
+      TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-2592000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      # Persist the WhatsApp session so you only scan the QR once.
+      - wweb-auth:/data
+    # Keep a TTY so the QR code renders correctly in `docker compose logs`.
+    stdin_open: true
+    tty: true
+
+volumes:
+  redis-data:
+  wweb-auth:

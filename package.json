@@ -1,0 +1,26 @@
+{
+  "name": "clickprint-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot for ClickPrint print management (whatsapp-web.js middleman to the ClickPrint backend)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "whatsapp",
+    "whatsapp-web.js",
+    "clickprint",
+    "printing",
+    "bot"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "form-data": "^4.0.1",
+    "ioredis": "^5.4.2",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.26.0"
+  }
+}
