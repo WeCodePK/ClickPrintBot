@@ -16,6 +16,12 @@ const config = {
   wwebjsDataPath: process.env.WWEBJS_DATA_PATH || undefined,
   logLevel: (process.env.LOG_LEVEL || 'info').toLowerCase(),
 
+  // HTTP gateway (the NotifyBot `/send` API). Lets external services send
+  // WhatsApp messages through this bot's client. `apiKey` guards the endpoint;
+  // when it is unset the endpoint rejects every request.
+  gatewayPort: Number.parseInt(process.env.PORT, 10) || 3000,
+  apiKey: process.env.API_KEY || '',
+
   // How long a listed collection (shops / jobs) stays valid so the user can
   // reference it by its 1-based index (e.g. `/shop 2`, `/cancel 1`).
   listCacheTtlSeconds: 60 * 15,

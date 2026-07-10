@@ -24,6 +24,13 @@ services:
       WWEBJS_CLIENT_ID: ${WWEBJS_CLIENT_ID:-clickprint}
       TOKEN_TTL_SECONDS: ${TOKEN_TTL_SECONDS:-2592000}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # HTTP gateway (NotifyBot `/send` API): set API_KEY to enable it.
+      # The container always listens on 3000 internally; publish it on the host
+      # via GATEWAY_PORT below.
+      API_KEY: ${API_KEY:-}
+    ports:
+      # Expose the HTTP gateway (`/send`, `/health`) on the host.
+      - "${GATEWAY_PORT:-3000}:3000"
     volumes:
       # Persist the WhatsApp session so you only scan the QR once.
       - wweb-auth:/data

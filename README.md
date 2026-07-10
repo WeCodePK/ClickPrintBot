@@ -21,6 +21,9 @@ place print jobs — all through fixed `/commands` (no natural-language guessing
 - 🧾 **Quote & confirm** — see a costed quote before you commit, then submit.
 - 📦 **Jobs** — list your active jobs and cancel them.
 - 👤 **Profile** — view your name & balance, and rename yourself.
+- 📣 **HTTP gateway** — a built-in `POST /send` API (the former *NotifyBot*) lets
+  your own services send WhatsApp messages through this bot, and `@mention`ing
+  the bot in any chat makes it reply with that chat's id.
 
 ## How it works
 
@@ -68,6 +71,48 @@ place print jobs — all through fixed `/commands` (no natural-language guessing
 | `type` | e.g. `A4` | page/paper type |
 
 Example: `/set 1 color on`
+
+## HTTP gateway (message sending)
+
+The bot also runs a small HTTP server (the former **NotifyBot**, now built in) so
+your own backends can push WhatsApp messages through the same linked account.
+You only need to run **ClickPrintBot** — there's no separate service.
+
+- **`POST /send`** — send a WhatsApp message. Guarded by an API key.
+- **`GET /health`** — unauthenticated liveness probe.
+
+### Finding a chat id
+
+`@mention` the bot in any chat (typically a group) and it replies with that
+chat's id, e.g. `Chat ID: 12345-67890@g.us`. Use that as the `chatId` below.
+Direct-chat ids look like `<number>@c.us`.
+
+### `POST /send`
+
+Send `chatId`, `message` and your `apiKey` (JSON body or query string):
+
+```bash
+curl -X POST http://localhost:3000/send \
+  -H 'Content-Type: application/json' \
+  -d '{"apiKey":"YOUR_API_KEY","chatId":"12345@c.us","message":"Hello!"}'
+```
+
+Responses use a consistent shape:
+
+```json
+{ "success": true, "message": "Sent message successfully", "data": {} }
+```
+
+| Status | When |
+| --- | --- |
+| `200` | Message sent |
+| `400` | Missing `apiKey`, or missing `chatId`/`message` |
+| `401` | `apiKey` doesn't match `API_KEY` (or `API_KEY` is unset) |
+| `500` | The WhatsApp client failed to send |
+
+> Set `API_KEY` in your environment to enable `/send`. While it's unset the
+> endpoint rejects every request. The gateway shares the bot's WhatsApp session,
+> so messages send only once the client is linked and `ready`.
 
 ## Setup
 
@@ -133,6 +178,8 @@ CLICKPRINT_API_URL=http://localhost:3000 docker compose up
 | `WWEBJS_CLIENT_ID` | `clickprint` | LocalAuth session id |
 | `WWEBJS_DATA_PATH` | *(unset)* | Where the WhatsApp session is stored (`/data` in Docker) |
 | `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `PORT` | `3000` | Port the HTTP gateway (`/send`, `/health`) listens on |
+| `API_KEY` | *(unset)* | Shared secret for `/send`. If blank, `/send` rejects every request |
 
 ## Project structure
 
@@ -141,6 +188,7 @@ src/
   index.js     WhatsApp client wiring (QR, lifecycle, message events)
   router.js    Parses messages, routes to media/command handlers
   handlers.js  Command handlers + media upload flow
+  gateway.js   HTTP server: POST /send message gateway (former NotifyBot)
   api.js       Backend API client (auth token cache, all endpoints)
   draft.js     Draft-building helpers (add/edit/remove files, set shop)
   session.js   Redis-backed state (active draft, list caches, per-user lock)

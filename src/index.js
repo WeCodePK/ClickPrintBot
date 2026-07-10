@@ -7,6 +7,7 @@ const config = require('./config');
 const logger = require('./logger');
 const redis = require('./redis');
 const { route } = require('./router');
+const { startGateway } = require('./gateway');
 
 const client = new Client({
   authStrategy: new LocalAuth({
@@ -56,8 +57,18 @@ client.on('message_create', (msg) => {
   if (!msg.fromMe) logger.debug(`'message_create' (inbound): from=${msg.from} type=${msg.type}`);
 });
 
+// HTTP gateway (NotifyBot `/send` API). Started once the client exists; message
+// sends only succeed after the client is 'ready'.
+const gatewayServer = startGateway(client);
+
 async function shutdown(signal) {
   logger.info(`Received ${signal}, shutting down…`);
+  try {
+    await new Promise((resolve) => gatewayServer.close(resolve));
+    logger.info('HTTP gateway closed');
+  } catch (err) {
+    logger.error('Error closing HTTP gateway:', err.message);
+  }
   try {
     await client.destroy();
   } catch (err) {

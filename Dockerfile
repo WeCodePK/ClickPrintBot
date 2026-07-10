@@ -22,4 +22,7 @@ RUN npm install --omit=dev
 
 COPY src ./src
 
+# HTTP gateway (NotifyBot `/send` API).
+EXPOSE 3000
+
 CMD ["node", "src/index.js"]

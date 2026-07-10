@@ -62,9 +62,33 @@ function isGroupOrBroadcast(from) {
   return from.endsWith('@g.us') || from.endsWith('@broadcast') || from === 'status@broadcast';
 }
 
+/**
+ * NotifyBot-style helper: when the bot is @mentioned in a chat (typically a
+ * group), reply with that chat's id so operators can grab the id to use with
+ * the HTTP `/send` gateway. Returns true if it handled the message.
+ */
+async function handleMentionForChatId(msg) {
+  try {
+    const botId = msg.client?.info?.wid?._serialized;
+    if (botId && msg.mentionedIds?.includes(botId)) {
+      const chat = await msg.getChat();
+      await msg.reply(`Chat ID: ${chat.id._serialized}`);
+      return true;
+    }
+  } catch (err) {
+    logger.error('Failed to handle mention:', err.message);
+  }
+  return false;
+}
+
 async function route(msg) {
-  // Only handle 1:1 user chats; skip groups, status broadcasts, own messages.
   if (msg.fromMe) return;
+
+  // Answer @mentions (incl. in groups) with the chat id before the group filter
+  // drops group/broadcast traffic.
+  if (await handleMentionForChatId(msg)) return;
+
+  // Beyond mentions, only handle 1:1 user chats; skip groups/status broadcasts.
   const from = msg.from || '';
   if (isGroupOrBroadcast(from)) return;
 
