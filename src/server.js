@@ -28,6 +28,7 @@ app.use(cors({
 
 const required = [
   'SERVICE_KEY',
+  'VERIFY_TOKEN'
 ];
 
 process.env.BACKEND_URL = process.env.BACKEND_URL || 'http://backend:3000';
@@ -47,7 +48,25 @@ app.get('/health', async (req, res) => {
 
 // -------------------------------------------------------------------------- //
 
+app.get('/', (req, res) => {
+  const {
+    'hub.mode': mode,
+    'hub.challenge': challenge,
+    'hub.verify_token': token 
+  } = req.query || {};
 
+  if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
+    console.log('WEBHOOK VERIFIED');
+    res.status(200).send(challenge);
+  }
+
+  res.status(403).end();
+});
+
+app.post('/', (req, res) => {
+  console.log(`[${new Date().toISOString()}] Webhook received: ${JSON.stringify(req.body, null, 2)}`);
+  res.status(200).end();
+});
 
 // -------------------------------------------------------------------------- //
 
