@@ -1,0 +1,30 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": { "display_phone_number": "15550009999", "phone_number_id": "PHONE_NUMBER_ID" },
+            "contacts": [{ "profile": { "name": "Test User" }, "wa_id": "15550001111" }],
+            "messages": [
+              {
+                "from": "15550001111",
+                "id": "wamid.LIST1",
+                "timestamp": "1700000003",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list_reply",
+                  "list_reply": { "id": "menu:draft", "title": "My Draft", "description": "View files and pick a shop" }
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}

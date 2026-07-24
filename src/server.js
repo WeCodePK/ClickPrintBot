@@ -2,6 +2,10 @@ const cors = require('cors');
 const morgan = require('morgan');
 const express = require('express');
 
+const logger = require('./logger');
+const webhook = require('./webhook');
+const router = require('./router');
+
 // -------------------------------------------------------------------------- //
 
 const app = express();
@@ -28,7 +32,10 @@ app.use(cors({
 
 const required = [
   'SERVICE_KEY',
-  'VERIFY_TOKEN'
+  'VERIFY_TOKEN',
+  'APP_SECRET',
+  'ACCESS_TOKEN',
+  'WABA_PHONE_NUMBER_ID',
 ];
 
 process.env.BACKEND_URL = process.env.BACKEND_URL || 'http://backend:3000';
@@ -52,20 +59,31 @@ app.get('/', (req, res) => {
   const {
     'hub.mode': mode,
     'hub.challenge': challenge,
-    'hub.verify_token': token 
+    'hub.verify_token': token
   } = req.query || {};
 
   if (mode === 'subscribe' && token === process.env.VERIFY_TOKEN) {
     console.log('WEBHOOK VERIFIED');
-    res.status(200).send(challenge);
+    return res.status(200).send(challenge);
   }
 
-  res.status(403).end();
+  return res.status(403).end();
 });
 
 app.post('/', (req, res) => {
-  console.log(`[${new Date().toISOString()}] Webhook received: ${JSON.stringify(req.body, null, 2)}`);
-  res.status(200).end();
+  const signature = req.get('X-Hub-Signature-256');
+  if (!webhook.verifySignature(req.rawBody, signature, process.env.APP_SECRET)) {
+    logger.warn('Rejected webhook POST with invalid signature');
+    return res.sendStatus(401);
+  }
+
+  // Ack immediately — Meta expects a fast response and retries on timeout/5xx.
+  res.sendStatus(200);
+
+  const events = webhook.extractEvents(req.body);
+  for (const event of events) {
+    router.handleEvent(event).catch((err) => logger.error('[router]', err));
+  }
 });
 
 // -------------------------------------------------------------------------- //
