@@ -92,7 +92,7 @@ async function handleMediaMessage(to, event) {
   await draft.addFile(to, uploaded._id);
 
   const pages = uploaded.numberOfPages ? ` (${uploaded.numberOfPages} page(s))` : '';
-  await whatsapp.sendText(to, `✅ Added *${uploaded.originalName}*${pages} to your draft.`);
+  await whatsapp.sendText(to, `✅ Added *${uploaded.name}*${pages} to your draft.`);
   await showDraft(to);
 }
 
@@ -101,7 +101,7 @@ function fileId(f) {
 }
 
 function fileName(f) {
-  return (f.file && f.file.originalName) || 'file';
+  return (f.file && f.file.name) || 'file';
 }
 
 async function showDraft(to) {

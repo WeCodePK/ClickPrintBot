@@ -12,13 +12,14 @@ function bold(s) {
 }
 
 function formatProfile(p) {
-  return [
+  const lines = [
     bold('👤 Your Profile'),
     '',
     `Name:    ${p.name || '—'}`,
     `Number:  ${p.number}`,
-    `Balance: ${money(p.balance)}`,
-  ].join('\n');
+  ];
+  if (p.balance !== undefined) lines.push(`Balance: ${money(p.balance)}`);
+  return lines.join('\n');
 }
 
 const SIDED_LABEL = {
@@ -45,7 +46,7 @@ function formatDraftFiles(draft) {
   if (!draft.files || !draft.files.length) return '  (no files yet)';
   return draft.files
     .map((f, i) => {
-      const name = (f.file && f.file.originalName) || 'file';
+      const name = (f.file && f.file.name) || 'file';
       const pages = f.file && f.file.numberOfPages;
       const pageStr = pages ? ` (${pages}p)` : '';
       return `  ${i + 1}. ${name}${pageStr}\n     ${formatSettings(f.settings)}`;
@@ -94,11 +95,11 @@ function formatShopDetail(shop) {
 function formatCost(cost) {
   if (!cost) return '';
   const lines = [];
-  (cost.lines || []).forEach(([name, qty, rate, sub]) => {
-    lines.push(`  ${name}  ${qty} × ${money(rate)} = ${money(sub)}`);
+  (cost.lines || []).forEach(({ item, quantity, rate, subtotal }) => {
+    lines.push(`  ${item}  ${quantity} × ${money(rate)} = ${money(subtotal)}`);
   });
-  (cost.extra || []).forEach(([name, amount]) => {
-    lines.push(`  ${name}: ${money(amount)}`);
+  (cost.extra || []).forEach(({ item, subtotal }) => {
+    lines.push(`  ${item}: ${money(subtotal)}`);
   });
   lines.push(`  ${bold(`Total: ${money(cost.total)}`)}`);
   return lines.join('\n');

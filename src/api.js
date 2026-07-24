@@ -14,10 +14,11 @@ class ApiError extends Error {
   }
 }
 
-// Per-number backend bearer token cache (in-memory — see state.js note on why
-// there's no Redis here). The backend issues a "forever" token, so this only
-// needs to be refreshed reactively, on a 401.
-const tokenCache = new Map();
+// Per-number backend session cache (in-memory — see state.js note on why
+// there's no Redis here): the bearer token plus the backend user id (needed
+// for the /api/users/:userId endpoints). The backend issues a "forever"
+// token, so this only needs to be refreshed reactively, on a 401.
+const sessionCache = new Map();
 
 function url(path) {
   return `${config.apiUrl}${path}`;
@@ -33,9 +34,9 @@ async function extractMessage(res, fallback) {
   return fallback;
 }
 
-/** Mint (and cache) a fresh backend token for a phone number. */
-async function fetchNewToken(number) {
-  const res = await fetch(url('/api/auth/token'), {
+/** Mint (and cache) a fresh backend session — token + user id — for a phone number. */
+async function fetchNewSession(number) {
+  const res = await fetch(url('/api/auth/mint'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -50,23 +51,33 @@ async function fetchNewToken(number) {
   }
   const body = await res.json();
   const token = body?.data?.token;
-  if (!token) throw new ApiError('Backend did not return an auth token.', res.status);
-  tokenCache.set(number, token);
-  logger.debug(`Issued new token for ${number}`);
-  return token;
+  const userId = body?.data?.user?._id;
+  if (!token || !userId) throw new ApiError('Backend did not return an auth token.', res.status);
+  const session = { token, userId };
+  sessionCache.set(number, session);
+  logger.debug(`Issued new session for ${number}`);
+  return session;
+}
+
+async function getSession(number, forceRefresh = false) {
+  if (!forceRefresh) {
+    const cached = sessionCache.get(number);
+    if (cached) return cached;
+  }
+  return fetchNewSession(number);
 }
 
 async function getToken(number, forceRefresh = false) {
-  if (!forceRefresh) {
-    const cached = tokenCache.get(number);
-    if (cached) return cached;
-  }
-  return fetchNewToken(number);
+  return (await getSession(number, forceRefresh)).token;
+}
+
+async function getUserId(number) {
+  return (await getSession(number)).userId;
 }
 
 /**
  * Perform an authenticated request. Injects the bearer token and, on a 401,
- * refreshes the token once and retries.
+ * refreshes the session once and retries.
  */
 async function authedRequest(number, { method = 'GET', path, json, formData }, isRetry = false) {
   const token = await getToken(number, isRetry);
@@ -87,8 +98,8 @@ async function authedRequest(number, { method = 'GET', path, json, formData }, i
   });
 
   if (res.status === 401 && !isRetry) {
-    logger.debug(`401 for ${number}, refreshing token and retrying`);
-    tokenCache.delete(number);
+    logger.debug(`401 for ${number}, refreshing session and retrying`);
+    sessionCache.delete(number);
     return authedRequest(number, { method, path, json, formData }, true);
   }
   if (!res.ok) {
@@ -103,13 +114,15 @@ async function authedRequest(number, { method = 'GET', path, json, formData }, i
 // ---------------------------------------------------------------------------
 
 async function getProfile(number) {
-  const body = await authedRequest(number, { method: 'GET', path: '/api/profile' });
-  return body.data.profile;
+  const userId = await getUserId(number);
+  const body = await authedRequest(number, { method: 'GET', path: `/api/users/${userId}` });
+  return body.data.user;
 }
 
 async function updateProfile(number, name) {
-  const body = await authedRequest(number, { method: 'PATCH', path: '/api/profile', json: { name } });
-  return body.data.profile;
+  const userId = await getUserId(number);
+  const body = await authedRequest(number, { method: 'PUT', path: `/api/users/${userId}`, json: { name } });
+  return body.data.user;
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +132,7 @@ async function updateProfile(number, name) {
 async function uploadFile(number, buffer, filename, contentType) {
   const formData = new FormData();
   formData.append('file', new Blob([buffer], { type: contentType }), filename);
+  formData.append('convert', 'true');
   const body = await authedRequest(number, { method: 'POST', path: '/api/files', formData });
   return body.data.file;
 }
@@ -152,7 +166,7 @@ async function getDraft(number, draftId) {
 }
 
 async function editDraft(number, draftId, payload) {
-  const body = await authedRequest(number, { method: 'PATCH', path: `/api/drafts/${draftId}`, json: payload });
+  const body = await authedRequest(number, { method: 'PUT', path: `/api/drafts/${draftId}`, json: payload });
   return body.data.draft;
 }
 
@@ -191,6 +205,7 @@ async function updateJobStatus(number, jobId, status) {
 module.exports = {
   ApiError,
   getToken,
+  getUserId,
   getProfile,
   updateProfile,
   uploadFile,
